@@ -1,5 +1,5 @@
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://tiktokreels-backend.vercel.app/'  // Replace with your deployed backend URL
+  ? 'https://tiktokreels-backend.vercel.app'  // ✅ Remove trailing slash
   : 'http://localhost:5000';
 
 export interface VideoDownloadResponse {
