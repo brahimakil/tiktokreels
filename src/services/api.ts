@@ -1,6 +1,6 @@
 // API Configuration matching tiktokapis.md, youtubeapis.md, facebookapis.md, and NEW instagramapis.md specifications
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-domain.com' // Update this to your production domain
+  ? 'https://tiktokreels-backend.vercel.app' // Update this to your production domain
   : 'http://localhost:3000';
 
 const TIKTOK_API_URL = `${API_BASE_URL}/api/v1/tiktok`;
