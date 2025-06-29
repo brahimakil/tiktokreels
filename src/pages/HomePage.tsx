@@ -17,6 +17,8 @@ const HomePage = ({ selectedPlatform }: HomePageProps) => {
   const [hasDownloadUrl, setHasDownloadUrl] = useState(false)
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [processingTime, setProcessingTime] = useState(0)
+  const [isPreparingDownload, setIsPreparingDownload] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
 
   const platformConfig = {
     tiktok: {
@@ -99,25 +101,53 @@ const HomePage = ({ selectedPlatform }: HomePageProps) => {
     }
     
     try {
-      // Step 1: Get video info (fast)
-      const { infoResult, downloadResult: immediateDownload } = await downloadVideoTwoStep(url)
+      const platform = detectPlatform(url)
       
-      setDownloadResult(infoResult)
-      setIsLoadingInfo(false)
-      
-      if (immediateDownload) {
-        // For TikTok/Instagram/Facebook - we already have the download URL
-        setHasDownloadUrl(true)
-        setDownloadResult(immediateDownload)
-      } else {
-        // For YouTube - we need to fetch the download URL separately
-        setIsGettingDownloadUrl(true)
+      if (platform === 'youtube') {
+        // For YouTube: Get info quickly first
+        console.log('🎬 Getting YouTube video info...')
+        const { infoResult } = await downloadVideoTwoStep(url)
         
-        // Step 2: Get download URL (slower)
-        const fullResult = await downloadVideo(url)
-        setDownloadResult(fullResult)
-        setHasDownloadUrl(true)
-        setIsGettingDownloadUrl(false)
+        setDownloadResult(infoResult)
+        setIsLoadingInfo(false)
+        
+        if (infoResult.success) {
+          // Immediately start getting download URL in background
+          console.log('🔄 Getting YouTube download URL...')
+          setIsGettingDownloadUrl(true)
+          
+          try {
+            // Get the actual download URL
+            const fullResult = await downloadVideo(url)
+            
+            if (fullResult.success && fullResult.data) {
+              console.log('✅ YouTube download URL ready!')
+              setDownloadResult(fullResult)
+              setHasDownloadUrl(true)
+            } else {
+              throw new Error(fullResult.error || 'Failed to get download URL')
+            }
+          } catch (error) {
+            console.error('❌ Failed to get YouTube download URL:', error)
+            setDownloadResult({
+              ...infoResult,
+              error: 'Failed to prepare download URL. Please try again.'
+            })
+          } finally {
+            setIsGettingDownloadUrl(false)
+          }
+        }
+      } else {
+        // For other platforms: Single request gets everything
+        const { infoResult, downloadResult: immediateDownload } = await downloadVideoTwoStep(url)
+        
+        setDownloadResult(infoResult)
+        setIsLoadingInfo(false)
+        
+        if (immediateDownload) {
+          setHasDownloadUrl(true)
+          setDownloadResult(immediateDownload)
+        }
       }
       
     } catch (error) {
@@ -136,48 +166,40 @@ const HomePage = ({ selectedPlatform }: HomePageProps) => {
     }
   }
 
-  // Enhanced function to handle download button click - Updated for new Instagram API
+  // Simplified download click handler - URL should already be ready
   const handleDownloadClick = async () => {
     if (!downloadResult?.data) return;
 
-    console.log('🔍 Full download result:', downloadResult);
-    console.log('🔍 Download result data:', downloadResult.data);
+    // Get the download URL
+    const downloadUrl = downloadResult.data.downloadUrl || downloadResult.data.videoUrl;
+    
+    if (!downloadUrl) {
+      console.error('❌ No download URL available - this should not happen!');
+      alert('Download URL not ready. Please try again.');
+      return;
+    }
 
-    // Get the download URL based on media type
-    let downloadUrl: string | undefined;
+    console.log('🔗 Using download URL:', downloadUrl);
+
+    // Get filename
     let filename: string;
     
     if (downloadResult.data.platform === 'instagram') {
-      // For Instagram, use video_url for videos, display_url for images
-      downloadUrl = downloadResult.data.is_video 
-        ? downloadResult.data.video_url || downloadResult.data.downloadUrl
-        : downloadResult.data.display_url || downloadResult.data.downloadUrl;
-      
       filename = downloadResult.data.safeTitle || 
                 `${downloadResult.data.owner?.username || 'instagram'}_${downloadResult.data.shortcode || 'media'}`;
       
-      // Add appropriate extension
       if (downloadResult.data.is_video) {
         filename += '.mp4';
       } else {
         filename += '.jpg';
       }
     } else {
-      // For other platforms
-      downloadUrl = downloadResult.data.downloadUrl || downloadResult.data.videoUrl;
       filename = downloadResult.data.safeTitle || downloadResult.data.title || 'video';
       if (!filename.includes('.')) {
         filename += '.mp4';
       }
     }
-    
-    if (!downloadUrl) {
-      console.error('❌ No download URL available in API response');
-      alert('No download URL received from the API. Please try again.');
-      return;
-    }
 
-    console.log('🔗 Using download URL:', downloadUrl);
     console.log('📁 Filename:', filename);
 
     try {
@@ -226,6 +248,23 @@ const HomePage = ({ selectedPlatform }: HomePageProps) => {
           alert(`Download failed. Here's the direct media URL:\n\n${downloadUrl}`);
         }
       }
+    }
+  };
+
+  // Helper function to detect platform
+  const detectPlatform = (url: string): 'youtube' | 'tiktok' | 'instagram' | 'facebook' => {
+    const lowerUrl = url.toLowerCase();
+    
+    if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+      return 'youtube';
+    } else if (lowerUrl.includes('tiktok.com')) {
+      return 'tiktok';
+    } else if (lowerUrl.includes('instagram.com')) {
+      return 'instagram';
+    } else if (lowerUrl.includes('facebook.com') || lowerUrl.includes('fb.watch')) {
+      return 'facebook';
+    } else {
+      return 'tiktok';
     }
   };
 
@@ -661,35 +700,63 @@ const HomePage = ({ selectedPlatform }: HomePageProps) => {
                         {/* Enhanced Download Button */}
                         <div className="text-center">
                           <div className="space-y-3">
-                            <button
-                              onClick={handleDownloadClick}
-                              className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-                            >
-                              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              Download {downloadResult.data.platform === 'instagram' 
-                                ? `Instagram ${downloadResult.data.is_video ? 'Video' : 'Image'}` 
-                                : 'Video'}
-                            </button>
-                            
-                            {downloadResult.data.platform === 'instagram' && (
-                              <div className="space-y-2">
-                                <p className="text-sm text-green-600 flex items-center justify-center">
-                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            {isGettingDownloadUrl ? (
+                              // Show progress while getting YouTube download URL
+                              <div className="space-y-4">
+                                <div className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold text-lg rounded-xl shadow-lg cursor-not-allowed">
+                                  <svg className="animate-spin w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                   </svg>
-                                   High Quality • No Watermark
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  Direct download from Instagram CDN
+                                  Preparing Download Link...
+                                </div>
+                                
+                                <p className="text-sm text-gray-600">
+                                  {downloadResult.data.platform === 'youtube' 
+                                    ? 'Processing YouTube video... This may take 10-30 seconds for large videos.'
+                                    : 'Getting download link...'}
                                 </p>
                               </div>
+                            ) : hasDownloadUrl ? (
+                              // Show download button when URL is ready
+                              <button
+                                onClick={handleDownloadClick}
+                                className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                              >
+                                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Download {downloadResult.data.platform === 'instagram' 
+                                  ? `Instagram ${downloadResult.data.is_video ? 'Video' : 'Image'}` 
+                                  : downloadResult.data.platform === 'youtube' ? 'YouTube Video'
+                                  : 'Video'}
+                              </button>
+                            ) : (
+                              // Show disabled state
+                              <div className="inline-flex items-center px-8 py-4 bg-gray-400 text-white font-bold text-lg rounded-xl shadow-lg cursor-not-allowed">
+                                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Download Not Ready
+                              </div>
+                            )}
+                            
+                            {/* Platform-specific messaging */}
+                            {downloadResult.data.platform === 'youtube' && hasDownloadUrl && (
+                              <p className="text-sm text-green-600 flex items-center justify-center">
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                YouTube Download Ready!
+                              </p>
                             )}
                           </div>
-                          <p className="text-sm text-gray-500 mt-3">
-                            High Quality • No Watermark • Fast Download
-                          </p>
+                          
+                          {hasDownloadUrl && (
+                            <p className="text-sm text-gray-500 mt-3">
+                              High Quality • No Watermark • Fast Download
+                            </p>
+                          )}
                         </div>
                       </div>
                     ) : (

@@ -1,12 +1,10 @@
-// API Configuration matching tiktokapis.md, youtubeapis.md, facebookapis.md, and NEW instagramapis.md specifications
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://tiktokreels-backend.vercel.app' // Update this to your production domain
-  : 'http://localhost:3000';
+// API Configuration - Always use production backend
+const API_BASE_URL = 'http://localhost:3000';
 
 const TIKTOK_API_URL = `${API_BASE_URL}/api/v1/tiktok`;
 const YOUTUBE_API_URL = `${API_BASE_URL}/api/v1/youtube`;
 const FACEBOOK_API_URL = `${API_BASE_URL}/api/v1/facebook/download`;
-const INSTAGRAM_API_URL = `${API_BASE_URL}/api/v1/instagram`; // Updated Instagram GraphQL API
+const INSTAGRAM_API_URL = `${API_BASE_URL}/api/v1/instagram`;
 
 // Default headers as specified in the documentation
 const defaultHeaders = {
