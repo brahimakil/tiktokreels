@@ -12,7 +12,7 @@ const Footer = () => {
             </div>
             <span className="text-white font-semibold text-sm sm:text-base">TikTokReels</span>
           </div>
-          <p className="text-xs sm:text-sm">&copy; 2024 TikTokReels. All rights reserved.</p>
+          <p className="text-xs sm:text-sm">&copy; 2025 TikTokReels. All rights reserved.</p>
         </div>
       </div>
     </footer>
