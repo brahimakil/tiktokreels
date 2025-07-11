@@ -1,5 +1,5 @@
 // API Configuration - Always use production backend
-const API_BASE_URL = 'https://tiktokreels-backend-production.up.railway.app';
+const API_BASE_URL = 'https://tiktokreels-backend.onrender.com';
 
 const TIKTOK_API_URL = `${API_BASE_URL}/api/v1/tiktok`;
 const YOUTUBE_API_URL = `${API_BASE_URL}/api/v1/youtube`;
